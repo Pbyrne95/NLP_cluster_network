@@ -1,6 +1,4 @@
-.class
-.xml
-/target
-/bin
-/maven-status
-/maven-archive
+*.iml
+.idea
+target
+**/**.DS_*

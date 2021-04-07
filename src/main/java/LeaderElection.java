@@ -17,7 +17,7 @@ public class LeaderElection implements Watcher {
         LeaderElection leaderElection = new LeaderElection();
         leaderElection.connectToZooKeeper();
         leaderElection.volenteerForLeadership();
-        leaderElection.electLeader();
+        leaderElection.reelectLeader();
         leaderElection.run();
         leaderElection.close();
         System.out.println("Exiting from application");
@@ -35,17 +35,27 @@ public class LeaderElection implements Watcher {
         this.zooKeeper = new ZooKeeper(ZOOKEEPER_ADDRESS,SESSION_TIMEOUT, this);
     }
 
-    public void electLeader() throws KeeperException , InterruptedException{
-        List<String> children =  zooKeeper.getChildren(ELECTION_NAMESPACE, false);
-        Collections.sort(children);
-        String smallestChild = children.get(0);
+    public void reelectLeader() throws KeeperException , InterruptedException{
+        Stat prodecessorStat = null;
+        String predecessorZnodeName = "";
+        while ( prodecessorStat == null ) {
+            List<String> children = zooKeeper.getChildren(ELECTION_NAMESPACE, false);
+            Collections.sort(children);
+            String smallestChild = children.get(0);
 
-        if(smallestChild.equals(currentZnodeName)){
-            System.out.println("Leader Found");
-            return;
+
+            if (smallestChild.equals(currentZnodeName)) {
+                System.out.println("Leader Found");
+                return;
+            } else {
+                System.out.println(" I am not the leader ");
+                int predeccossorIndex = Collections.binarySearch(children, currentZnodeName);
+                predecessorZnodeName = children.get(predeccossorIndex);
+                prodecessorStat = zooKeeper.exists(ELECTION_NAMESPACE + "/" + predecessorZnodeName, this);
+
+            }
         }
-        System.out.println("not the leader " + smallestChild + " Is the current Leader ");
-
+        System.out.println("Watching znode " + predecessorZnodeName);
     }
 
     public void run() throws InterruptedException{
@@ -84,23 +94,14 @@ public class LeaderElection implements Watcher {
                 break;
             case NodeDeleted:
                 System.out.println(TARGET_ZNODE + " was deleted ");
+                try{
+                    reelectLeader();
+                }catch (KeeperException e){
+                    e.printStackTrace();
+                }catch (InterruptedException e){
+                    e.printStackTrace();
+                }
                 break;
-            case NodeCreated:
-                System.out.println(TARGET_ZNODE + " was created ");
-                break;
-            case NodeDataChanged:
-                System.out.println(TARGET_ZNODE + " was changed ");
-                break;
-            case NodeChildrenChanged:
-                System.out.println(TARGET_ZNODE + " children changed ");
-
-        }
-        try{
-            watchTargetZnode();
-
-        }catch (KeeperException e){
-        }catch(InterruptedException e){
-            e.printStackTrace();
         }
     }
 }
