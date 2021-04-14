@@ -37,24 +37,29 @@ public class LeaderElection implements Watcher {
 
     public void reelectLeader() throws KeeperException , InterruptedException{
         Stat prodecessorStat = null;
+        // String for name of pred node
         String predecessorZnodeName = "";
+        // while loop to help prevent race conditions
         while ( prodecessorStat == null ) {
             List<String> children = zooKeeper.getChildren(ELECTION_NAMESPACE, false);
             Collections.sort(children);
             String smallestChild = children.get(0);
 
-
             if (smallestChild.equals(currentZnodeName)) {
                 System.out.println("Leader Found");
                 return;
             } else {
+                // Current block find the predesccossor Node in case that Node fails in order to increase fault tolerence
                 System.out.println(" I am not the leader ");
-                int predeccossorIndex = Collections.binarySearch(children, currentZnodeName);
+                // uses a binary Search to find the current Node index in the list of children -1 as you are searching for the predeccossor
+                int predeccossorIndex = Collections.binarySearch(children, currentZnodeName) -1;
+                // Getting the name of the last Znode
                 predecessorZnodeName = children.get(predeccossorIndex);
+                // checking if that Znode exists or still exisits
                 prodecessorStat = zooKeeper.exists(ELECTION_NAMESPACE + "/" + predecessorZnodeName, this);
-
             }
         }
+        // Print out the current Znode in which you are watching
         System.out.println("Watching znode " + predecessorZnodeName);
     }
 
@@ -69,11 +74,19 @@ public class LeaderElection implements Watcher {
     }
 
     public void watchTargetZnode() throws KeeperException , InterruptedException {
+        // stat -> Gives all of the current Meta Data about the Znode
+
         Stat stat = zooKeeper.exists(TARGET_ZNODE, this);
+
+        // If the current Znode does not currently exist then return from the method
         if(stat == null){
             return;
         }
+        // if it does exist then call the current data into a list of bytes and implement a watcher method
+
         byte [] data = zooKeeper.getData(TARGET_ZNODE, this, stat);
+        // calling the getChildren to order to notify any changes to the current Node children
+
         List<String> children = zooKeeper.getChildren(TARGET_ZNODE, this);
 
         System.out.println("Data: " + new String(data) + " children :" + children);
@@ -92,6 +105,10 @@ public class LeaderElection implements Watcher {
                     }
                 }
                 break;
+
+                // Creating a cass for a NodeDeletion event to notify connected nodes of a deletion
+                // This force the current node to relellect leader if a node in the network fails
+                // This help to prevent the herd affect
             case NodeDeleted:
                 System.out.println(TARGET_ZNODE + " was deleted ");
                 try{
